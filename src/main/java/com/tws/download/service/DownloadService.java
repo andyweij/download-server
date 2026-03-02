@@ -1,25 +1,34 @@
 package com.tws.download.service;
 
+import com.tws.download.component.AWSS3Util;
+import com.tws.download.dto.DownloadInfoDTO;
+import com.tws.download.dto.DownloadResponse;
+import com.tws.download.dto.S3ObjectInfo;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class DownloadService {
 
-    private final S3Presigner s3Presigner;
-    private final String bucketName;
+    private final AWSS3Util awsS3Util;
 
-    public DownloadService(S3Presigner s3Presigner, @Value("${aws.s3.bucket}") String bucketName) {
-        this.s3Presigner = s3Presigner;
-        this.bucketName = bucketName;
+    // 定義過期時間常數，方便未來管理
+    private static final Duration URL_EXPIRATION = Duration.ofHours(1);
+
+    public DownloadService(AWSS3Util awsS3Util) {
+        this.awsS3Util = awsS3Util;
     }
-
     /**
      * Validates the API key.
      * Throws an exception if invalid.
@@ -35,23 +44,28 @@ public class DownloadService {
         }
     }
 
-    /**
-     * Generates a presigned URL for the given file.
-     *
-     * @param fileName The key of the file in S3
-     * @return The presigned URL request containing the URL and expiration
-     */
-    public PresignedGetObjectRequest generateDownloadLink(String fileName) {
-        GetObjectRequest objectRequest = GetObjectRequest.builder()
-                .bucket(bucketName)
-                .key("models/" + fileName)
-                .build();
+    public DownloadResponse generateDownloadLink(String fileName) {
+        // 1. 決定過期時間點
+        Instant expiresAt = Instant.now().plus(URL_EXPIRATION);
 
-        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
-                .signatureDuration(Duration.ofHours(1))
-                .getObjectRequest(objectRequest)
-                .build();
+        // 2. 呼叫底層工具取得內部 S3 模型列表
+        List<S3ObjectInfo> s3Objects = awsS3Util.generateObjectDownloadLinks(fileName, URL_EXPIRATION);
 
-        return s3Presigner.presignGetObject(presignRequest);
+        // 3. 轉換為對外的 DTO (DownloadInfoDTO)
+        List<DownloadInfoDTO> fileDtos = s3Objects.stream()
+                .map(info -> DownloadInfoDTO.builder()
+                        .relativePath(info.getRelativePath())
+                        .size(info.getSize())
+                        .downloadUrl(info.getDownloadUrl())
+                        .build())
+                .collect(Collectors.toList());
+
+        // 4. 封裝並回傳最終的 Response DTO
+        return DownloadResponse.builder()
+                .objectName(fileName)
+                .expiresAt(expiresAt)
+                .files(fileDtos)
+                .filesCount(fileDtos.size())
+                .build();
     }
 }

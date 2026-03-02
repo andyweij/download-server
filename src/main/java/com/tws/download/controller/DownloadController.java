@@ -3,6 +3,7 @@ package com.tws.download.controller;
 import com.tws.download.dto.DownloadRequest;
 import com.tws.download.dto.DownloadResponse;
 import com.tws.download.service.DownloadService;
+import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -25,19 +26,14 @@ public class DownloadController {
     }
 
     @PostMapping("/sign")
-    public ResponseEntity<?> signDownload(@RequestBody DownloadRequest request) {
+    public ResponseEntity<?> signDownload(@Valid @RequestBody DownloadRequest request) {
         try {
             logger.info("Received download request for file: {} with API Key: {}", request.getFileName(),
                     request.getApiKey());
 
             downloadService.validateApiKey(request.getApiKey());
 
-            PresignedGetObjectRequest presignedRequest = downloadService.generateDownloadLink(request.getFileName());
-
-            DownloadResponse response = new DownloadResponse(
-                    presignedRequest.url().toString(),
-                    presignedRequest.expiration());
-
+            DownloadResponse response = downloadService.generateDownloadLink(request.getFileName());
             logger.info("Successfully generated presigned URL for file: {}", request.getFileName());
             return ResponseEntity.ok(response);
 

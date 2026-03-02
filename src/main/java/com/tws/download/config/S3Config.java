@@ -1,5 +1,6 @@
 package com.tws.download.config;
 
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -24,11 +25,18 @@ public class S3Config {
     @Value("${aws.s3.region}")
     private String region;
 
-    @Value("${aws.s3.endpoint:}")
+    @Value("${aws.s3.endpoint}")
+    @NotBlank(message = "AWS S3 endpoint 不能為空")
     private String endpoint;
 
-    @Value("${aws.s3.bucket:}")
+    @Value("${aws.s3.bucket}")
+    @NotBlank(message = "AWS S3 bucket 不能為空")
     private String bucketName;
+
+    @NotBlank(message = "AWS S3 prefix 不能為空")
+    @Value("${aws.s3.model-prefix}")
+    private String modelPrefix;
+
     @Bean
     public S3Presigner s3Presigner() {
         S3Presigner.Builder builder = S3Presigner.builder()

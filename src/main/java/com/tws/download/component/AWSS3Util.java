@@ -1,6 +1,9 @@
 package com.tws.download.component;
 
 import com.tws.download.config.S3Config;
+import com.tws.download.dto.DownloadInfoDTO;
+import com.tws.download.dto.DownloadResponse;
+import com.tws.download.dto.S3ObjectInfo;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +22,9 @@ import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.services.s3.paginators.ListObjectsV2Iterable;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
 import java.io.*;
 import java.math.BigInteger;
@@ -47,11 +53,14 @@ public class AWSS3Util {
 
     private S3Client s3Client;
 
+    private S3Presigner s3Presigner;
+
     @Autowired
-    public AWSS3Util(S3Config awsS3Config) {
+    public AWSS3Util(S3Config awsS3Config, S3Presigner s3Presigner) {
         this.awsS3Config = awsS3Config;
         this.s3Client = initS3Client();
         this.s3AsyncClient = initializeS3AsyncClient();
+        this.s3Presigner = s3Presigner;
     }
 
     // 初始化 S3AsyncClient
@@ -536,4 +545,53 @@ public class AWSS3Util {
                 .reduce(BigInteger.ZERO, BigInteger::add); // 將所有 BigInteger 加總
     }
 
+    /**
+     * 取得指定目錄下所有檔案的預簽名資訊
+     */
+    public List<S3ObjectInfo> generateObjectDownloadLinks(String objectName, Duration expiration) {
+        String fullPrefix = awsS3Config.getModelPrefix() + "/" + objectName;
+
+        ListObjectsV2Request listReq = ListObjectsV2Request.builder()
+                .bucket(awsS3Config.getBucketName())
+                .prefix(fullPrefix + "/") // 確保加上結尾斜線，避免查到相似前綴
+                .build();
+
+        ListObjectsV2Response listRes = s3Client.listObjectsV2(listReq);
+
+        return listRes.contents().stream()
+                .filter(s3Obj -> !s3Obj.key().endsWith("/"))
+                .map(s3Obj -> {
+                    // 這裡的 s3Obj.key() 已經包含了 prefix，產生 URL 時直接傳入完整 key
+                    String url = generateSinglePresignedUrl(s3Obj.key(), expiration);
+
+                    // 擷取相對路徑 (去除 fullPrefix 和後面的斜線)
+                    String relativePath = s3Obj.key().substring(fullPrefix.length() + 1);
+
+                    return S3ObjectInfo.builder()
+                            .relativePath(relativePath)
+                            .size(s3Obj.size())
+                            .downloadUrl(url)
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 產生單一檔案的預簽名 URL
+     * 注意：這裡接收的 key 必須是完整的 S3 Key
+     */
+    public String generateSinglePresignedUrl(String fullKey, Duration expiration) {
+        GetObjectRequest objectRequest = GetObjectRequest.builder()
+                .bucket(awsS3Config.getBucketName())
+                .key(fullKey)
+                .build();
+
+        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+                .signatureDuration(expiration)
+                .getObjectRequest(objectRequest)
+                .build();
+
+        PresignedGetObjectRequest presignedRequest = s3Presigner.presignGetObject(presignRequest);
+        return presignedRequest.url().toString();
+    }
 }

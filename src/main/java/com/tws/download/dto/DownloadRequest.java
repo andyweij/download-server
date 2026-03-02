@@ -1,22 +1,16 @@
 package com.tws.download.dto;
 
+import com.tws.download.constant.TargetType;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import lombok.Data;
+
+@Data
 public class DownloadRequest {
+    @NotBlank
     private String apiKey;
+    @NotNull
+    private TargetType targetType;
+    @NotBlank
     private String fileName;
-
-    public String getApiKey() {
-        return apiKey;
-    }
-
-    public void setApiKey(String apiKey) {
-        this.apiKey = apiKey;
-    }
-
-    public String getFileName() {
-        return fileName;
-    }
-
-    public void setFileName(String fileName) {
-        this.fileName = fileName;
-    }
 }

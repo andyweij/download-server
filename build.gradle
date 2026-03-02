@@ -10,6 +10,16 @@ version = '0.0.1-SNAPSHOT'
 java {
     sourceCompatibility = '17'
 }
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+configurations.all {
+    exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    exclude group: 'ch.qos.logback'
+}
 
 repositories {
     mavenCentral()
@@ -26,13 +36,20 @@ dependencies {
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
-
+    // swagger
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
+    //Spring Boot Validation Starter
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    //S3 SDK
     implementation platform('software.amazon.awssdk:bom:2.27.21')
     implementation 'software.amazon.awssdk:s3'
     implementation 'software.amazon.awssdk:sso'
     implementation 'software.amazon.awssdk:ssooidc'
     implementation 'software.amazon.awssdk:dynamodb-enhanced'
     implementation 'software.amazon.awssdk:netty-nio-client'
+    // 引入 Log4j2 啟動器，作為 SLF4J 的實作
+    implementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    runtimeOnly 'org.postgresql:postgresql'
 }
 
 tasks.named('test') {
